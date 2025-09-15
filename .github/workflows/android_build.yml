@@ -1,0 +1,66 @@
+name: Android CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      # -------- Build Debug APK --------
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v3
+        with:
+          name: BookNotifier-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+      # -------- Prepare Keystore --------
+      - name: Decode Keystore
+        run: |
+          echo "$SIGNING_KEYSTORE_BASE64" | base64 --decode > booknotifier.keystore
+
+      # -------- Build Release APK --------
+      - name: Build Release APK
+        run: ./gradlew assembleRelease \
+          -Pandroid.injected.signing.store.file=booknotifier.keystore \
+          -Pandroid.injected.signing.store.password=$SIGNING_STORE_PASSWORD \
+          -Pandroid.injected.signing.key.alias=$SIGNING_KEY_ALIAS \
+          -Pandroid.injected.signing.key.password=$SIGNING_KEY_PASSWORD
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v3
+        with:
+          name: BookNotifier-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
+
+      # -------- Build Release AAB (Play Store) --------
+      - name: Build Release AAB
+        run: ./gradlew bundleRelease \
+          -Pandroid.injected.signing.store.file=booknotifier.keystore \
+          -Pandroid.injected.signing.store.password=$SIGNING_STORE_PASSWORD \
+          -Pandroid.injected.signing.key.alias=$SIGNING_KEY_ALIAS \
+          -Pandroid.injected.signing.key.password=$SIGNING_KEY_PASSWORD
+
+      - name: Upload Release AAB
+        uses: actions/upload-artifact@v3
+        with:
+          name: BookNotifier-release-aab
+          path: app/build/outputs/bundle/release/app-release.aab
